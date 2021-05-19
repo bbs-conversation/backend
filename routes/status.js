@@ -7,7 +7,7 @@ router.get(
   asyncHandler(async (req, res) => {
     res.json({
       success: true,
-      code: res.statusCode(),
+      code: res.statusCode,
       message: 'API is live',
     });
   })
