@@ -6,6 +6,7 @@ const RESTroutes = require('./routes');
 const errorHandler = require('./middlewares/errors');
 const server = http.createServer(app);
 const dotenv = require('dotenv');
+const admin = require('./config/firebaseAdmin');
 
 // Dotenv config
 dotenv.config({
@@ -14,7 +15,10 @@ dotenv.config({
 
 const io = socketIo(server, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin: [
+      'http://localhost:3000',
+      'https://bbs-conversations-students.web.app',
+    ],
     methods: ['GET', 'POST'],
   },
 });
@@ -28,6 +32,24 @@ app.use('/api', RESTroutes);
 // Use error handler
 app.use(errorHandler);
 
+io.use((socket, next) => {
+  const token = socket.handshake.query.token;
+  const error = new Error('not_authorized');
+  if (token) {
+    admin
+      .auth()
+      .verifyIdToken(token)
+      .then((token) => next())
+      .catch((err) => {
+        console.error(err);
+        next(error);
+        socket.disconnect(false);
+      });
+  } else {
+    next(error);
+    socket.disconnect(false);
+  }
+});
 io.on('connection', (socket) => {
   const id = socket.handshake.query.id;
   socket.join(id);
@@ -55,9 +77,20 @@ io.on('connection', (socket) => {
     });
   });
 
-  // socket.on('disconnect', () => {
-  //   io.emit('A user has left the chat');
-  // });
+  socket.on('disconnect_user', () => {
+    socket.disconnect(true);
+  });
+
+  socket.on('disconnect', () => {
+    socket.emit('message', {
+      message: 'You have been disconnected from the server',
+      recipients: [id],
+      sender: id,
+      type: 'fromServer',
+
+      channelId: 'all',
+    });
+  });
 });
 
 const port = process.env.PORT || 5000;
