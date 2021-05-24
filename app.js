@@ -19,6 +19,9 @@ const io = socketIo(server, {
   },
 });
 
+// Use express json parser
+app.use(express.json());
+
 // Use api routes
 app.use('/api', RESTroutes);
 
@@ -31,10 +34,12 @@ io.on('connection', (socket) => {
   console.log('A new connection detected');
 
   socket.emit('message', {
-    message: 'you are now connected',
+    message: 'You are now connected',
     recipients: [id],
     sender: id,
     type: 'fromServer',
+
+    channelId: 'all',
   });
 
   socket.on('send-message', ({ recipients, text }) => {
