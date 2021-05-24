@@ -64,7 +64,7 @@ io.on('connection', (socket) => {
     channelId: 'all',
   });
 
-  socket.on('send-message', ({ recipients, text }) => {
+  socket.on('send-message', ({ recipients, text, byUser }) => {
     recipients.forEach((recipient) => {
       const newRecipients = recipients.filter((r) => r !== recipient);
       newRecipients.push(id);
@@ -73,6 +73,9 @@ io.on('connection', (socket) => {
         sender: id,
         message: text,
         type: 'toUser',
+        byUser,
+        time: Date.now(),
+        channelId: id,
       });
     });
   });
@@ -87,7 +90,6 @@ io.on('connection', (socket) => {
       recipients: [id],
       sender: id,
       type: 'fromServer',
-
       channelId: 'all',
     });
   });
