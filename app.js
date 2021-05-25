@@ -60,7 +60,8 @@ io.on('connection', (socket) => {
     recipients: [id],
     sender: id,
     type: 'fromServer',
-
+    byUser: 'chat server',
+    time: Date.now(),
     channelId: 'all',
   });
 
@@ -84,15 +85,15 @@ io.on('connection', (socket) => {
     socket.disconnect(true);
   });
 
-  socket.on('disconnect', () => {
-    socket.emit('message', {
-      message: 'You have been disconnected from the server',
-      recipients: [id],
-      sender: id,
-      type: 'fromServer',
-      channelId: 'all',
-    });
-  });
+  // socket.on('disconnect', () => {
+  //   socket.emit('message', {
+  //     message: 'You have been disconnected from the server',
+  //     recipients: [id],
+  //     sender: id,
+  //     type: 'fromServer',
+  //     channelId: 'all',
+  //   });
+  // });
 });
 
 const port = process.env.PORT || 5000;
