@@ -17,6 +17,7 @@ const io = socketIo(server, {
   cors: {
     origin: [
       'http://localhost:3000',
+      'https://bbs-conversations-students.netlify.app',
       'https://bbs-conversations-students.web.app',
     ],
     methods: ['GET', 'POST'],
