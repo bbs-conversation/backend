@@ -54,7 +54,10 @@ io.use((socket, next) => {
     admin
       .auth()
       .verifyIdToken(token)
-      .then((token) => next())
+      .then((token) => {
+        socket.token = token;
+        next();
+      })
       .catch((err) => {
         console.error(err);
         next(error);
@@ -82,6 +85,35 @@ io.on('connection', (socket) => {
     channelId: 'all',
   });
 
+  socket.on('chat-with', async (user) => {
+    try {
+      const room = await chatRooms.findOne({
+        fromUser: socket.token.uid,
+        toUser: user,
+      });
+      if (!room) {
+        await chatRooms.insertOne({
+          fromUser: socket.token.uid,
+          toUser: user,
+          messages: [],
+        });
+      }
+      socket.emit('Chat is now being saved with end to end encryption');
+      socket.activeChat = user;
+    } catch (e) {
+      console.error(e);
+      socket.emit('message', {
+        message: 'An error occured while saving chat',
+        recipient: id,
+        sender: id,
+        type: 'fromServer',
+        byUser: 'chat server',
+        time: Date.now(),
+        channelId: 'all',
+      });
+    }
+  });
+
   socket.on('send-message', ({ recipient, text, byUser }) => {
     socket.broadcast.to(recipient).emit('message', {
       recipient,
@@ -99,7 +131,35 @@ io.on('connection', (socket) => {
   });
 });
 
-let chatCollection;
+app.get('/chats', async (req, res) => {
+  try {
+    let result = await chatRooms.findOne({
+      fromUser: req.query.uid,
+      toUser: req.query.user,
+    });
+    if (!result) {
+      res.status(404).json({
+        success: true,
+        status: res.statusCode,
+        message: 'No chat history found',
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        status: res.statusCode,
+        message: 'Chat messages',
+        data: result,
+      });
+    }
+  } catch (e) {
+    console.error(e.message);
+    res
+      .status(500)
+      .json({ success: false, status: res.statusCode, message: e.message });
+  }
+});
+
+let chatRooms;
 
 async function connectMongoDB() {
   try {
@@ -107,12 +167,7 @@ async function connectMongoDB() {
     await client.connect();
     // Establish and verify connection
     await client.db('admin').command({ ping: 1 });
-    chatCollection = client
-      .db(process.env.MONGO_DB_NAME)
-      .collection('counsellors');
-    chatCollection = client
-      .db(process.env.MONGO_DB_NAME)
-      .collection('chatRooms');
+    chatRooms = client.db(process.env.MONGO_DB_NAME).collection('chatRooms');
     console.log('Connected successfully to server');
   } catch (err) {
     console.log(err.message);
