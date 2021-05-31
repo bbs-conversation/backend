@@ -44,6 +44,34 @@ app.use(express.json());
 // Use api routes
 app.use('/api', RESTroutes);
 
+app.get('/api/chats', async (req, res) => {
+  try {
+    let result = await chatRooms.findOne({
+      fromUser: req.query.uid,
+      toUser: req.query.user,
+    });
+    if (!result) {
+      res.status(404).json({
+        success: true,
+        status: res.statusCode,
+        message: 'No chat history found',
+      });
+    } else {
+      res.status(200).json({
+        success: true,
+        status: res.statusCode,
+        message: 'Chat messages',
+        data: result,
+      });
+    }
+  } catch (e) {
+    console.error(e.message);
+    res
+      .status(500)
+      .json({ success: false, status: res.statusCode, message: e.message });
+  }
+});
+
 // Use error handler
 app.use(errorHandler);
 
@@ -114,13 +142,24 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('send-message', ({ recipient, text, byUser }) => {
-    socket.broadcast.to(recipient).emit('message', {
+  socket.on('send-message', ({ message }) => {
+    chatCollection.updateOne(
+      {
+        fromUser: socket.token.uid,
+        toUser: socket.activeChat,
+      },
+      {
+        $push: {
+          messages: message,
+        },
+      }
+    );
+    socket.broadcast.to(socket.activeChat).emit('message', {
       recipient,
       sender: id,
-      message: text,
+      message: message,
       type: 'toUser',
-      byUser,
+      byUser: socket.token.uid,
       time: Date.now(),
       channelId: id,
     });
@@ -129,34 +168,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect_user', () => {
     socket.disconnect(true);
   });
-});
-
-app.get('/chats', async (req, res) => {
-  try {
-    let result = await chatRooms.findOne({
-      fromUser: req.query.uid,
-      toUser: req.query.user,
-    });
-    if (!result) {
-      res.status(404).json({
-        success: true,
-        status: res.statusCode,
-        message: 'No chat history found',
-      });
-    } else {
-      res.status(200).json({
-        success: true,
-        status: res.statusCode,
-        message: 'Chat messages',
-        data: result,
-      });
-    }
-  } catch (e) {
-    console.error(e.message);
-    res
-      .status(500)
-      .json({ success: false, status: res.statusCode, message: e.message });
-  }
 });
 
 let chatRooms;
