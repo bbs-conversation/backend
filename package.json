@@ -19,5 +19,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js"
+  },
+  "engines": {
+    "node": "14.x"
   }
 }
