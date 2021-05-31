@@ -6,11 +6,25 @@ const RESTroutes = require('./routes');
 const errorHandler = require('./middlewares/errors');
 const server = http.createServer(app);
 const dotenv = require('dotenv');
-const admin = require('./config/firebaseAdmin');
-
 // Dotenv config
 dotenv.config({
   path: './config.env',
+});
+const admin = require('./config/firebaseAdmin');
+
+const { MongoClient } = require('mongodb');
+const { exit } = require('process');
+
+const uri = process.env.MONGO_URI;
+
+if (!uri) {
+  throw new Error('Please specify MongoDB URI');
+}
+
+// Create a new MongoClient
+const client = new MongoClient(uri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
 
 const io = socketIo(server, {
@@ -54,11 +68,13 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   const id = socket.handshake.query.id;
   socket.join(id);
-  console.log('A new connection detected');
+  if (NODE_ENV !== 'production') {
+    console.log('A new connection detected with id');
+  }
 
   socket.emit('message', {
     message: 'You are now connected',
-    recipients: [id],
+    recipient: id,
     sender: id,
     type: 'fromServer',
     byUser: 'chat server',
@@ -66,41 +82,50 @@ io.on('connection', (socket) => {
     channelId: 'all',
   });
 
-  socket.on('send-message', ({ recipients, text, byUser }) => {
-    recipients.forEach((recipient) => {
-      const newRecipients = recipients.filter((r) => r !== recipient);
-      newRecipients.push(id);
-      socket.broadcast.to(recipient).emit('message', {
-        recipients: newRecipients,
-        sender: id,
-        message: text,
-        type: 'toUser',
-        byUser,
-        time: Date.now(),
-        channelId: id,
-      });
+  socket.on('send-message', ({ recipient, text, byUser }) => {
+    socket.broadcast.to(recipient).emit('message', {
+      recipient,
+      sender: id,
+      message: text,
+      type: 'toUser',
+      byUser,
+      time: Date.now(),
+      channelId: id,
     });
   });
 
   socket.on('disconnect_user', () => {
     socket.disconnect(true);
   });
-
-  // socket.on('disconnect', () => {
-  //   socket.emit('message', {
-  //     message: 'You have been disconnected from the server',
-  //     recipients: [id],
-  //     sender: id,
-  //     type: 'fromServer',
-  //     channelId: 'all',
-  //   });
-  // });
 });
 
+let chatCollection;
+
+async function connectMongoDB() {
+  try {
+    // Connect the client to the server
+    await client.connect();
+    // Establish and verify connection
+    await client.db('admin').command({ ping: 1 });
+    chatCollection = client
+      .db(process.env.MONGO_DB_NAME)
+      .collection('counsellors');
+    chatCollection = client
+      .db(process.env.MONGO_DB_NAME)
+      .collection('chatRooms');
+    console.log('Connected successfully to server');
+  } catch (err) {
+    console.log(err.message);
+    process.exit(1);
+  }
+}
+
 const port = process.env.PORT || 5000;
-server.listen(port, () =>
-  console.log(`Listening on port ${port} in ${process.env.NODE_ENV} mode`)
-);
+server.listen(port, () => {
+  connectMongoDB().then(() =>
+    console.log(`Listening on port ${port} in ${process.env.NODE_ENV} mode`)
+  );
+});
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
