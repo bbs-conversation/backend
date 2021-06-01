@@ -118,45 +118,39 @@ io.on('connection', (socket) => {
   }
 
   socket.emit('message', {
-    message: 'You are now connected',
+    message: 'You are now connected to the server',
+    time: new Date(),
+
     recipient: id,
-    sender: id,
-    type: 'fromServer',
-    byUser: 'chat server',
-    time: Date.now(),
-    channelId: 'all',
+    senderName: 'Chat Bot',
   });
 
-  socket.on('chat-with', async (user) => {
+  socket.on('chat-with', async ({ user }) => {
+    if (development) console.log('fired chat-with event', user);
     const usersFilter = { users: { $all: [id, user] } };
     try {
+      socket.emit('message', {
+        message: 'Chat is now being saved with end to end encryption',
+        time: new Date(),
+        recipient: id,
+        senderName: 'Chat Bot',
+      });
       const room = await chatRooms.findOne(usersFilter);
+
       if (!room) {
         await chatRooms.insertOne({
           users: [id, user],
           messages: [],
         });
       }
-      socket.emit('message', {
-        message: 'Chat is now being saved with endto end encryption',
-        recipient: id,
-        sender: id,
-        type: 'fromServer',
-        byUser: 'chat server',
-        time: Date.now(),
-        channelId: 'all',
-      });
       socket.activeChat = user;
     } catch (e) {
       console.error(e);
       socket.emit('message', {
         message: 'An error occured while saving chat',
+        time: new Date(),
+        senderName: 'Chat Bot',
         recipient: id,
-        sender: id,
-        type: 'fromServer',
-        byUser: 'chat server',
-        time: Date.now(),
-        channelId: 'all',
       });
     }
   });
@@ -169,18 +163,17 @@ io.on('connection', (socket) => {
           message: message,
           time: new Date(),
           sender: id,
+          senderName: socket.token.name,
           recipient: socket.activeChat,
         },
       },
     });
     socket.broadcast.to(socket.activeChat).emit('message', {
-      recipient: socket.activeChat,
-      sender: id,
       message: message,
-      type: 'toUser',
-      byUser: id,
-      time: Date.now(),
-      channelId: id,
+      time: new Date(),
+      senderName: socket.token.name,
+      sender: id,
+      recipient: socket.activeChat,
     });
   });
 
