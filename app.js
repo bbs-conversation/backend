@@ -47,38 +47,53 @@ app.use(express.json());
 app.use('/api', RESTroutes);
 
 app.get('/api/chats', async (req, res) => {
-  const { user1, user2 } = req.query;
-  if (!user1 || !user2) {
+  const { token, user } = req.query;
+  if (!user || !token) {
     res.status(400).json({
       success: false,
       code: res.statusCode,
       message: 'Please enter the required parameters',
     });
   } else {
-    try {
-      let result = await chatRooms.findOne({
-        users: { $all: [user1, user2] },
+    admin
+      .auth()
+      .verifyIdToken(token)
+      .then((token) => {
+        try {
+          let result = await chatRooms.findOne({
+            users: { $all: [token.user_id, user] },
+          });
+          if (!result) {
+            res.status(404).json({
+              success: true,
+              code: res.statusCode,
+              message: 'No chat history found',
+            });
+          } else {
+            res.status(200).json({
+              success: true,
+              code: res.statusCode,
+              message: 'Chat messages',
+              data: result,
+            });
+          }
+        } catch (e) {
+          console.error(e.message);
+          res.status(500).json({
+            success: false,
+            status: res.statusCode,
+            message: e.message,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        res.status(500).json({
+          success: false,
+          status: res.statusCode,
+          message: err.message,
+        });
       });
-      if (!result) {
-        res.status(404).json({
-          success: true,
-          code: res.statusCode,
-          message: 'No chat history found',
-        });
-      } else {
-        res.status(200).json({
-          success: true,
-          code: res.statusCode,
-          message: 'Chat messages',
-          data: result,
-        });
-      }
-    } catch (e) {
-      console.error(e.message);
-      res
-        .status(500)
-        .json({ success: false, status: res.statusCode, message: e.message });
-    }
   }
 });
 
