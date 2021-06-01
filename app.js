@@ -54,30 +54,31 @@ app.get('/api/chats', async (req, res) => {
       code: res.statusCode,
       message: 'Please enter the required parameters',
     });
-  }
-  try {
-    let result = await chatRooms.findOne({
-      users: { $all: [user1, user2] },
-    });
-    if (!result) {
-      res.status(404).json({
-        success: true,
-        code: res.statusCode,
-        message: 'No chat history found',
+  } else {
+    try {
+      let result = await chatRooms.findOne({
+        users: { $all: [user1, user2] },
       });
-    } else {
-      res.status(200).json({
-        success: true,
-        status: res.statusCode,
-        message: 'Chat messages',
-        data: result,
-      });
+      if (!result) {
+        res.status(404).json({
+          success: true,
+          code: res.statusCode,
+          message: 'No chat history found',
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          code: res.statusCode,
+          message: 'Chat messages',
+          data: result,
+        });
+      }
+    } catch (e) {
+      console.error(e.message);
+      res
+        .status(500)
+        .json({ success: false, status: res.statusCode, message: e.message });
     }
-  } catch (e) {
-    console.error(e.message);
-    res
-      .status(500)
-      .json({ success: false, status: res.statusCode, message: e.message });
   }
 });
 
