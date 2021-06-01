@@ -13,7 +13,8 @@ dotenv.config({
 const admin = require('./config/firebaseAdmin');
 
 const { MongoClient } = require('mongodb');
-const { exit } = require('process');
+
+const development = process.env.NODE_ENV !== 'production' || false;
 
 const uri = process.env.MONGO_URI;
 
@@ -33,6 +34,7 @@ const io = socketIo(server, {
       'http://localhost:3000',
       'https://bbs-conversations-students.netlify.app',
       'https://bbs-conversations-students.web.app',
+      'https://amritb.github.io',
     ],
     methods: ['GET', 'POST'],
   },
@@ -47,7 +49,7 @@ app.use('/api', RESTroutes);
 app.get('/api/chats', async (req, res) => {
   try {
     let result = await chatRooms.findOne({
-      fromUser: req.query.uid,
+      fromUser: req.query.userId,
       toUser: req.query.user,
     });
     if (!result) {
@@ -99,7 +101,7 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   const id = socket.handshake.query.id;
   socket.join(id);
-  if (NODE_ENV !== 'production') {
+  if (development) {
     console.log('A new connection detected with id');
   }
 
@@ -116,17 +118,25 @@ io.on('connection', (socket) => {
   socket.on('chat-with', async (user) => {
     try {
       const room = await chatRooms.findOne({
-        fromUser: socket.token.uid,
+        fromUser: socket.token.user_id,
         toUser: user,
       });
       if (!room) {
         await chatRooms.insertOne({
-          fromUser: socket.token.uid,
+          fromUser: socket.token.user_id,
           toUser: user,
           messages: [],
         });
       }
-      socket.emit('Chat is now being saved with end to end encryption');
+      socket.emit('message', {
+        message: 'Chat is now being saved with endto end encryption',
+        recipient: id,
+        sender: id,
+        type: 'fromServer',
+        byUser: 'chat server',
+        time: Date.now(),
+        channelId: 'all',
+      });
       socket.activeChat = user;
     } catch (e) {
       console.error(e);
@@ -143,25 +153,29 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', ({ message }) => {
-    chatCollection.updateOne(
-      {
-        fromUser: socket.token.uid,
-        toUser: socket.activeChat,
-      },
-      {
-        $push: {
-          messages: message,
-        },
-      }
-    );
-    socket.broadcast.to(socket.activeChat).emit('message', {
-      recipient,
-      sender: id,
-      message: message,
-      type: 'toUser',
-      byUser: socket.token.uid,
-      time: Date.now(),
-      channelId: id,
+    // chatRooms.updateOne(
+    //   {
+    //     fromUser: socket.token.user_id,
+    //     toUser: socket.activeChat,
+    //   },
+    //   {
+    //     $push: {
+    //       messages: message,
+    //     },
+    //   }
+    // );
+    // socket.broadcast.to(socket.activeChat).emit('message', {
+    //   recipient,
+    //   sender: id,
+    //   message: message,
+    //   type: 'toUser',
+    //   byUser: socket.token.user_id,
+    //   time: Date.now(),
+    //   channelId: id,
+    // });
+    console.log({
+      fromUser: socket.token.user_id,
+      toUser: socket.activeChat,
     });
   });
 
