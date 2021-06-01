@@ -13,6 +13,7 @@ dotenv.config({
 const admin = require('./config/firebaseAdmin');
 
 const { MongoClient } = require('mongodb');
+const authenticated = require('./middlewares/auth');
 
 const development = process.env.NODE_ENV !== 'production' || false;
 
@@ -46,54 +47,41 @@ app.use(express.json());
 // Use api routes
 app.use('/api', RESTroutes);
 
-app.get('/api/chats', async (req, res) => {
-  const { token, user } = req.query;
-  if (!user || !token) {
+app.get('/api/chats', authenticated, async (req, res) => {
+  const { user } = req.query;
+  if (!user) {
     res.status(400).json({
       success: false,
       code: res.statusCode,
       message: 'Please enter the required parameters',
     });
   } else {
-    admin
-      .auth()
-      .verifyIdToken(token)
-      .then((token) => {
-        try {
-          let result = await chatRooms.findOne({
-            users: { $all: [token.user_id, user] },
-          });
-          if (!result) {
-            res.status(404).json({
-              success: true,
-              code: res.statusCode,
-              message: 'No chat history found',
-            });
-          } else {
-            res.status(200).json({
-              success: true,
-              code: res.statusCode,
-              message: 'Chat messages',
-              data: result,
-            });
-          }
-        } catch (e) {
-          console.error(e.message);
-          res.status(500).json({
-            success: false,
-            status: res.statusCode,
-            message: e.message,
-          });
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        res.status(500).json({
-          success: false,
-          status: res.statusCode,
-          message: err.message,
-        });
+    try {
+      let result = await chatRooms.findOne({
+        users: { $all: [req.token.user_id, user] },
       });
+      if (!result) {
+        res.status(404).json({
+          success: true,
+          code: res.statusCode,
+          message: 'No chat history found',
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          code: res.statusCode,
+          message: 'Chat messages',
+          data: result,
+        });
+      }
+    } catch (e) {
+      console.error(e.message);
+      res.status(500).json({
+        success: false,
+        status: res.statusCode,
+        message: e.message,
+      });
+    }
   }
 });
 

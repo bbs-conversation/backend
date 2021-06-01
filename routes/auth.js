@@ -22,7 +22,7 @@ router.post(
           });
         })
         .catch((err) => {
-          next(new ErrorResponse(err, 400));
+          next(new ErrorResponse(err, 401));
         });
     }
   })
