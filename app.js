@@ -47,15 +47,22 @@ app.use(express.json());
 app.use('/api', RESTroutes);
 
 app.get('/api/chats', async (req, res) => {
+  const { user1, user2 } = req.query;
+  if (!user1 || !user2) {
+    res.status(400).json({
+      success: false,
+      code: res.statusCode,
+      message: 'Please enter the required parameters',
+    });
+  }
   try {
     let result = await chatRooms.findOne({
-      fromUser: req.query.userId,
-      toUser: req.query.user,
+      users: { $all: [user1, user2] },
     });
     if (!result) {
       res.status(404).json({
         success: true,
-        status: res.statusCode,
+        code: res.statusCode,
         message: 'No chat history found',
       });
     } else {
@@ -98,8 +105,9 @@ io.use((socket, next) => {
     socket.disconnect(false);
   }
 });
+
 io.on('connection', (socket) => {
-  const id = socket.handshake.query.id;
+  const id = socket.token.user_id;
   socket.join(id);
   if (development) {
     console.log('A new connection detected with id');
@@ -116,15 +124,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat-with', async (user) => {
+    const usersFilter = { users: { $all: [id, user] } };
     try {
-      const room = await chatRooms.findOne({
-        fromUser: socket.token.user_id,
-        toUser: user,
-      });
+      const room = await chatRooms.findOne(usersFilter);
       if (!room) {
         await chatRooms.insertOne({
-          fromUser: socket.token.user_id,
-          toUser: user,
+          users: [id, user],
           messages: [],
         });
       }
@@ -153,29 +158,25 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', ({ message }) => {
-    // chatRooms.updateOne(
-    //   {
-    //     fromUser: socket.token.user_id,
-    //     toUser: socket.activeChat,
-    //   },
-    //   {
-    //     $push: {
-    //       messages: message,
-    //     },
-    //   }
-    // );
-    // socket.broadcast.to(socket.activeChat).emit('message', {
-    //   recipient,
-    //   sender: id,
-    //   message: message,
-    //   type: 'toUser',
-    //   byUser: socket.token.user_id,
-    //   time: Date.now(),
-    //   channelId: id,
-    // });
-    console.log({
-      fromUser: socket.token.user_id,
-      toUser: socket.activeChat,
+    const usersFilter = { users: { $all: [id, socket.activeChat] } };
+    chatRooms.updateOne(usersFilter, {
+      $push: {
+        messages: {
+          message: message,
+          time: new Date(),
+          sender: id,
+          recipient: socket.activeChat,
+        },
+      },
+    });
+    socket.broadcast.to(socket.activeChat).emit('message', {
+      recipient: socket.activeChat,
+      sender: id,
+      message: message,
+      type: 'toUser',
+      byUser: id,
+      time: Date.now(),
+      channelId: id,
     });
   });
 
