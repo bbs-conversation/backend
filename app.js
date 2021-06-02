@@ -12,8 +12,11 @@ dotenv.config({
 });
 const admin = require('./config/firebaseAdmin');
 
+const cors = require('cors');
+
 const { MongoClient } = require('mongodb');
 const authenticated = require('./middlewares/auth');
+const ErrorResponse = require('./utils/errorResponse');
 
 const development = process.env.NODE_ENV !== 'production' || false;
 
@@ -31,15 +34,18 @@ const client = new MongoClient(uri, {
 
 const io = socketIo(server, {
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'https://bbs-conversations-students.netlify.app',
-      'https://bbs-conversations-students.web.app',
-      'https://amritb.github.io',
-    ],
+    origin: ['https://bbs-conversations-students.web.app'],
     methods: ['GET', 'POST'],
   },
 });
+
+const corsOptions = {
+  origin: ['https://bbs-conversations-students.web.app'],
+  optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+// Use cors middleware
+app.use(cors(corsOptions));
 
 // Use express json parser
 app.use(express.json());
@@ -70,8 +76,7 @@ app.get('/api/chats', authenticated, async (req, res) => {
         res.status(200).json({
           success: true,
           code: res.statusCode,
-          message: 'Chat messages',
-          data: result,
+          message: result,
         });
       }
     } catch (e) {
@@ -84,6 +89,30 @@ app.get('/api/chats', authenticated, async (req, res) => {
     }
   }
 });
+
+// app.get('/api/chat-rooms', authenticated, async (req, res, next) => {
+//   try {
+//     let result = await chatRooms.findOne({
+//       users: { $all: [req.token.user_id] },
+//     });
+//     if (!result) {
+//       res.status(404).json({
+//         success: true,
+//         code: res.statusCode,
+//         message: 'No chat rooms found',
+//       });
+//     } else {
+//       res.status(200).json({
+//         success: true,
+//         code: res.statusCode,
+//         message: result,
+//       });
+//     }
+//   } catch (err) {
+//     if (development) console.error(err);
+//     return next(new ErrorResponse(err.message, 500));
+//   }
+// });
 
 // Use error handler
 app.use(errorHandler);
