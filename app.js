@@ -34,13 +34,21 @@ const client = new MongoClient(uri, {
 
 const io = socketIo(server, {
   cors: {
-    origin: ['https://bbs-conversations-students.web.app'],
+    origin: [
+      'https://bbs-conversations-students.web.app',
+      'https://bbs-conversations-students.netlify.app',
+      'http://localhost:3000',
+    ],
     methods: ['GET', 'POST'],
   },
 });
 
 const corsOptions = {
-  origin: ['https://bbs-conversations-students.web.app'],
+  origin: [
+    'https://bbs-conversations-students.web.app',
+    'https://bbs-conversations-students.netlify.app',
+    'http://localhost:3000',
+  ],
   optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
