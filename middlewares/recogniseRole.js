@@ -1,20 +1,14 @@
-const counsellors = require('../config/counsellors.json');
-
 const recogniseRole = (req, _, next) => {
-  if (!counsellors) {
-    req.role === 'student';
-    next();
-  }
   if (!req.token) {
     console.error(`Can't find token object`);
-    req.role === 'student';
-    next();
+    req.role = 'student';
+    throw new Error(`Can't find token object`);
   }
-  if (counsellors.includes(req.token.user_id)) {
-    req.role === 'counsellor';
+  if (req.token.counsellor === true) {
+    req.role = 'counsellor';
     next();
   } else {
-    req.role === 'student';
+    req.role = 'student';
     next();
   }
 };

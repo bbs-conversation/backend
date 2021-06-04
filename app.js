@@ -19,6 +19,7 @@ const authenticated = require('./middlewares/auth');
 const recogniseRole = require('./middlewares/recogniseRole');
 const counsellors = require('./config/counsellors.json');
 const ErrorResponse = require('./utils/errorResponse');
+const socketioAuth = require('./middlewares/socketio_auth');
 
 const development = process.env.NODE_ENV !== 'production' || false;
 
@@ -66,13 +67,15 @@ app.use('/api', RESTroutes);
 app.get('/api/chats', authenticated, recogniseRole, async (req, res) => {
   const { user } = req.query;
   if (!user) {
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       code: res.statusCode,
       message: 'Please enter the required parameters',
     });
-  } else if (req.role !== 'counsellor' && !counsellors.includes(user)) {
-    res.status(403).json({
+  }
+  if (development) console.log(req.role);
+  if (req.role !== 'counsellor' && !counsellors.includes(user)) {
+    return res.status(403).json({
       success: false,
       code: res.statusCode,
       message: `User can only get history of their counsellors`,
@@ -106,54 +109,43 @@ app.get('/api/chats', authenticated, recogniseRole, async (req, res) => {
   }
 });
 
-// app.get('/api/chat-rooms', authenticated, async (req, res, next) => {
-//   try {
-//     let result = await chatRooms.findOne({
-//       users: { $all: [req.token.user_id] },
-//     });
-//     if (!result) {
-//       res.status(404).json({
-//         success: true,
-//         code: res.statusCode,
-//         message: 'No chat rooms found',
-//       });
-//     } else {
-//       res.status(200).json({
-//         success: true,
-//         code: res.statusCode,
-//         message: result,
-//       });
-//     }
-//   } catch (err) {
-//     if (development) console.error(err);
-//     return next(new ErrorResponse(err.message, 500));
-//   }
-// });
+app.get(
+  '/api/chat-rooms',
+  authenticated,
+  recogniseRole,
+  async (req, res, next) => {
+    if (req.role !== 'counsellor')
+      return next(
+        new ErrorResponse('Only counsellors can access the route', 403)
+      );
+    try {
+      let result = await chatRooms.findOne({
+        users: { $all: [req.token.user_id] },
+      });
+      if (!result) {
+        res.status(404).json({
+          success: true,
+          code: res.statusCode,
+          message: 'No chat rooms found',
+        });
+      } else {
+        res.status(200).json({
+          success: true,
+          code: res.statusCode,
+          message: result,
+        });
+      }
+    } catch (err) {
+      if (development) console.error(err);
+      return next(new ErrorResponse(err.message, 500));
+    }
+  }
+);
 
 // Use error handler
 app.use(errorHandler);
 
-io.use((socket, next) => {
-  const token = socket.handshake.query.token;
-  const error = new Error('not_authorized');
-  if (token) {
-    admin
-      .auth()
-      .verifyIdToken(token)
-      .then((token) => {
-        socket.token = token;
-        next();
-      })
-      .catch((err) => {
-        console.error(err);
-        next(error);
-        socket.disconnect(false);
-      });
-  } else {
-    next(error);
-    socket.disconnect(false);
-  }
-});
+io.use(socketioAuth);
 
 io.on('connection', (socket) => {
   const id = socket.token.user_id;
@@ -162,16 +154,23 @@ io.on('connection', (socket) => {
     console.log('A new connection detected with id');
   }
 
-  socket.emit('message', {
-    message: 'You are now connected to the server',
-    time: new Date(),
+  // socket.emit('message', {
+  //   message: 'You are now connected to the server',
+  //   time: new Date(),
 
-    recipient: id,
-    senderName: 'Chat Bot',
-  });
+  //   recipient: id,
+  //   senderName: 'Chat Bot',
+  // });
 
   socket.on('chat-with', async ({ user }) => {
     if (development) console.log('fired chat-with event', user);
+    if (!socket.token.counsellor && !counsellors.includes(user))
+      return socket.emit('message', {
+        message: 'You can only chat with a counsellor',
+        time: new Date(),
+        recipient: id,
+        senderName: 'Chat Bot',
+      });
     const usersFilter = { users: { $all: [id, user] } };
     try {
       socket.emit('message', {
@@ -201,6 +200,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-message', ({ message }) => {
+    if (!socket.activeChat)
+      return socket.emit('message', {
+        message: 'Please select a user',
+        time: new Date(),
+        senderName: 'Chat Bot',
+        recipient: id,
+      });
     const usersFilter = { users: { $all: [id, socket.activeChat] } };
     chatRooms.updateOne(usersFilter, {
       $push: {
