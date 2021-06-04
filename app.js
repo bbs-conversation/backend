@@ -16,6 +16,8 @@ const cors = require('cors');
 
 const { MongoClient } = require('mongodb');
 const authenticated = require('./middlewares/auth');
+const recogniseRole = require('./middlewares/recogniseRole');
+const counsellors = require('./config/counsellors.json');
 const ErrorResponse = require('./utils/errorResponse');
 
 const development = process.env.NODE_ENV !== 'production' || false;
@@ -61,13 +63,19 @@ app.use(express.json());
 // Use api routes
 app.use('/api', RESTroutes);
 
-app.get('/api/chats', authenticated, async (req, res) => {
+app.get('/api/chats', authenticated, recogniseRole, async (req, res) => {
   const { user } = req.query;
   if (!user) {
     res.status(400).json({
       success: false,
       code: res.statusCode,
       message: 'Please enter the required parameters',
+    });
+  } else if (req.role !== 'counsellor' && !counsellors.includes(user)) {
+    res.status(403).json({
+      success: false,
+      code: res.statusCode,
+      message: `User can only get history of their counsellors`,
     });
   } else {
     try {
