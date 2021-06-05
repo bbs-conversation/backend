@@ -10,7 +10,6 @@ const dotenv = require('dotenv');
 dotenv.config({
   path: './config.env',
 });
-const admin = require('./config/firebaseAdmin');
 
 const cors = require('cors');
 
@@ -21,8 +20,11 @@ const counsellors = require('./config/counsellors.json');
 const ErrorResponse = require('./utils/errorResponse');
 const socketioAuth = require('./middlewares/socketio_auth');
 const Filter = require('bad-words');
-const filter = new Filter();
+const xss = require('xss-clean');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
 
+const filter = new Filter();
 const development = process.env.NODE_ENV !== 'production' || false;
 
 const uri = process.env.MONGO_URI;
@@ -60,8 +62,17 @@ const corsOptions = {
 // Use cors middleware
 app.use(cors(corsOptions));
 
+// Use helmet for headers
+app.use(helmet());
+
 // Use express json parser
 app.use(express.json());
+
+// Use XSS Clean middleware
+app.use(xss());
+
+// Sanitize mongodb data
+app.use(mongoSanitize());
 
 // Use api routes
 app.use('/api', RESTroutes);
