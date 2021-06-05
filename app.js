@@ -13,49 +13,31 @@ dotenv.config({
 
 const cors = require('cors');
 
-const { MongoClient } = require('mongodb');
 const authenticated = require('./middlewares/auth');
 const recogniseRole = require('./middlewares/recogniseRole');
 const counsellors = require('./config/counsellors.json');
 const ErrorResponse = require('./utils/errorResponse');
 const socketioAuth = require('./middlewares/socketio_auth');
-const Filter = require('bad-words');
 const xss = require('xss-clean');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
+const socketioCallback = require('./routes/socketioCallback');
+const client = require('./config/mongoClient');
 
-const filter = new Filter();
 const development = process.env.NODE_ENV !== 'production' || false;
 
-const uri = process.env.MONGO_URI;
-
-if (!uri) {
-  throw new Error('Please specify MongoDB URI');
-}
-
-// Create a new MongoClient
-const client = new MongoClient(uri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+let corsOrigin = ['https://bbs-conversations-students.web.app'];
+if (development) corsOrigin.push('http://localhost:3000');
 
 const io = socketIo(server, {
   cors: {
-    origin: [
-      'https://bbs-conversations-students.web.app',
-      'https://bbs-conversations-students.netlify.app',
-      'http://localhost:3000',
-    ],
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
   },
 });
 
 const corsOptions = {
-  origin: [
-    'https://bbs-conversations-students.web.app',
-    'https://bbs-conversations-students.netlify.app',
-    'http://localhost:3000',
-  ],
+  origin: corsOrigin,
   optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
@@ -68,11 +50,11 @@ app.use(helmet());
 // Use express json parser
 app.use(express.json());
 
-// Use XSS Clean middleware
-app.use(xss());
-
 // Sanitize mongodb data
 app.use(mongoSanitize());
+
+// Use XSS Clean middleware
+app.use(xss());
 
 // Use api routes
 app.use('/api', RESTroutes);
@@ -123,8 +105,6 @@ app.get(
         users: req.token.user_id,
       });
       if (result) {
-        let finalData;
-
         result.toArray(function (err, result) {
           if (err) return next(new ErrorResponse(err, 500));
 
@@ -159,111 +139,7 @@ app.use(errorHandler);
 
 io.use(socketioAuth);
 
-io.on('connection', (socket) => {
-  const id = socket.token.user_id;
-  socket.join(id);
-  if (development) {
-    console.log('A new connection detected with id');
-  }
-
-  // socket.emit('message', {
-  //   message: 'You are now connected to the server',
-  //   time: new Date(),
-
-  //   recipient: id,
-  //   senderName: 'Chat Bot',
-  // });
-
-  socket.on('chat-with', async ({ user }) => {
-    if (development) console.log('fired chat-with event', user);
-    if (socket.token.user_id === user) {
-      socket.activeChat = undefined;
-      return socket.emit('message', {
-        message: 'Users can only chat with others',
-        time: new Date(),
-        recipient: id,
-        senderName: 'Chat Bot',
-      });
-    }
-    if (!socket.token.counsellor && !counsellors.includes(user))
-      return socket.emit('message', {
-        message: 'You can only chat with a counsellor',
-        time: new Date(),
-        recipient: id,
-        senderName: 'Chat Bot',
-      });
-    const usersFilter = { users: { $all: [id, user] } };
-    try {
-      socket.emit('message', {
-        message: 'Chat is now being saved with end to end encryption',
-        time: new Date(),
-        recipient: id,
-        senderName: 'Chat Bot',
-      });
-      const room = await chatRooms.findOne(usersFilter);
-
-      if (!room) {
-        if (socket.token.counsellor === true) {
-          socket.activeChat = undefined;
-          return socket.emit('message', {
-            message: 'Only student can start a conversation',
-            time: new Date(),
-            recipient: id,
-            senderName: 'Chat Bot',
-          });
-        } else {
-          await chatRooms.insertOne({
-            users: [id, user],
-            messages: [],
-            name: socket.token.name,
-          });
-        }
-      }
-      socket.activeChat = user;
-    } catch (e) {
-      console.error(e);
-      socket.emit('message', {
-        message: 'An error occured while saving chat',
-        time: new Date(),
-        senderName: 'Chat Bot',
-        recipient: id,
-      });
-    }
-  });
-
-  socket.on('send-message', ({ message }) => {
-    if (!socket.activeChat)
-      return socket.emit('message', {
-        message: 'Please select a user',
-        time: new Date(),
-        senderName: 'Chat Bot',
-        recipient: id,
-      });
-    const usersFilter = { users: { $all: [id, socket.activeChat] } };
-    chatRooms.updateOne(usersFilter, {
-      $push: {
-        messages: {
-          message: filter.clean(message),
-          time: new Date(),
-          sender: id,
-          senderName: socket.token.name,
-          recipient: socket.activeChat,
-        },
-      },
-    });
-    socket.broadcast.to(socket.activeChat).emit('message', {
-      message: filter.clean(message),
-      time: new Date(),
-      senderName: socket.token.name,
-      sender: id,
-      recipient: socket.activeChat,
-    });
-  });
-
-  socket.on('disconnect_user', () => {
-    socket.disconnect(true);
-  });
-});
+io.on('connection', socketioCallback);
 
 let chatRooms;
 
@@ -274,9 +150,9 @@ async function connectMongoDB() {
     // Establish and verify connection
     await client.db('admin').command({ ping: 1 });
     chatRooms = client.db(process.env.MONGO_DB_NAME).collection('chatRooms');
-    console.log('Connected successfully to server');
+    console.log('Connected successfully to server: express');
   } catch (err) {
-    console.log(err.message);
+    console.error(err.message);
     process.exit(1);
   }
 }
@@ -290,7 +166,7 @@ server.listen(port, () => {
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
-  console.log(`Error [UHP]: ${err.message}`);
+  console.error(`Error [UHP]: ${err.message}`);
   // Close server connection
   server.close(() => process.exit(1));
 });
