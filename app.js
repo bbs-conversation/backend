@@ -108,20 +108,32 @@ app.get(
         new ErrorResponse('Only counsellors can access the route', 403)
       );
     try {
-      let result = await chatRooms.findOne({
-        users: { $all: [req.token.user_id] },
+      let result = await chatRooms.find({
+        users: req.token.user_id,
       });
-      if (!result) {
+      if (result) {
+        let finalData;
+
+        result.toArray(function (err, result) {
+          if (err) return next(new ErrorResponse(err, 500));
+
+          res.status(200).json({
+            success: true,
+            code: res.statusCode,
+            message: result,
+          });
+          if (!result)
+            res.status(404).json({
+              success: true,
+              code: res.statusCode,
+              message: 'No chat rooms found',
+            });
+        });
+      } else {
         res.status(404).json({
           success: true,
           code: res.statusCode,
           message: 'No chat rooms found',
-        });
-      } else {
-        res.status(200).json({
-          success: true,
-          code: res.statusCode,
-          message: result,
         });
       }
     } catch (err) {
@@ -180,10 +192,21 @@ io.on('connection', (socket) => {
       const room = await chatRooms.findOne(usersFilter);
 
       if (!room) {
-        await chatRooms.insertOne({
-          users: [id, user],
-          messages: [],
-        });
+        if (socket.token.counsellor === true) {
+          socket.activeChat = undefined;
+          return socket.emit('message', {
+            message: 'Only student can start a conversation',
+            time: new Date(),
+            recipient: id,
+            senderName: 'Chat Bot',
+          });
+        } else {
+          await chatRooms.insertOne({
+            users: [id, user],
+            messages: [],
+            name: socket.token.name,
+          });
+        }
       }
       socket.activeChat = user;
     } catch (e) {

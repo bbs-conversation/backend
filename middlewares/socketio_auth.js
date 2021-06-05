@@ -13,6 +13,13 @@ const socketioAuth = (socket, next) => {
       })
       .catch((err) => {
         console.error(err);
+        socket.emit('message', {
+          message:
+            'Either your token is invalid, or you session has expired please refresh the page to retry',
+          time: new Date(),
+          senderName: 'Chat Bot',
+          recipient: id,
+        });
         next(error);
         socket.disconnect(false);
       });
