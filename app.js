@@ -20,6 +20,8 @@ const recogniseRole = require('./middlewares/recogniseRole');
 const counsellors = require('./config/counsellors.json');
 const ErrorResponse = require('./utils/errorResponse');
 const socketioAuth = require('./middlewares/socketio_auth');
+const Filter = require('bad-words');
+const filter = new Filter();
 
 const development = process.env.NODE_ENV !== 'production' || false;
 
@@ -64,34 +66,25 @@ app.use(express.json());
 // Use api routes
 app.use('/api', RESTroutes);
 
-app.get('/api/chats', authenticated, recogniseRole, async (req, res) => {
+app.get('/api/chats', authenticated, recogniseRole, async (req, res, next) => {
   const { user } = req.query;
   if (!user) {
-    return res.status(400).json({
-      success: false,
-      code: res.statusCode,
-      message: 'Please enter the required parameters',
-    });
+    return next(new ErrorResponse('Please enter the required parameters', 400));
   }
+  if (user === req.token.user_id)
+    return next(new ErrorResponse('Users can only chat with others', 400));
   if (development) console.log(req.role);
-  if (req.role !== 'counsellor' && !counsellors.includes(user)) {
-    return res.status(403).json({
-      success: false,
-      code: res.statusCode,
-      message: `User can only get history of their counsellors`,
-    });
-  } else {
+  if (req.role !== 'counsellor' && !counsellors.includes(user))
+    return next(
+      new ErrorResponse('User can only get history of their counsellors', 403)
+    );
+  else {
     try {
       let result = await chatRooms.findOne({
         users: { $all: [req.token.user_id, user] },
       });
-      if (!result) {
-        res.status(404).json({
-          success: true,
-          code: res.statusCode,
-          message: 'No chat history found',
-        });
-      } else {
+      if (!result) return next(new ErrorResponse('No chat history found', 404));
+      else {
         res.status(200).json({
           success: true,
           code: res.statusCode,
@@ -100,11 +93,7 @@ app.get('/api/chats', authenticated, recogniseRole, async (req, res) => {
       }
     } catch (e) {
       console.error(e.message);
-      res.status(500).json({
-        success: false,
-        status: res.statusCode,
-        message: e.message,
-      });
+      return next(new ErrorResponse(e.message, 500));
     }
   }
 });
@@ -164,6 +153,15 @@ io.on('connection', (socket) => {
 
   socket.on('chat-with', async ({ user }) => {
     if (development) console.log('fired chat-with event', user);
+    if (socket.token.user_id === user) {
+      socket.activeChat = undefined;
+      return socket.emit('message', {
+        message: 'Users can only chat with others',
+        time: new Date(),
+        recipient: id,
+        senderName: 'Chat Bot',
+      });
+    }
     if (!socket.token.counsellor && !counsellors.includes(user))
       return socket.emit('message', {
         message: 'You can only chat with a counsellor',
@@ -211,7 +209,7 @@ io.on('connection', (socket) => {
     chatRooms.updateOne(usersFilter, {
       $push: {
         messages: {
-          message: message,
+          message: filter.clean(message),
           time: new Date(),
           sender: id,
           senderName: socket.token.name,
@@ -220,7 +218,7 @@ io.on('connection', (socket) => {
       },
     });
     socket.broadcast.to(socket.activeChat).emit('message', {
-      message: message,
+      message: filter.clean(message),
       time: new Date(),
       senderName: socket.token.name,
       sender: id,
