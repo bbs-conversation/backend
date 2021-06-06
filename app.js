@@ -26,7 +26,8 @@ const client = require('./config/mongoClient');
 
 const development = process.env.NODE_ENV !== 'production' || false;
 
-let corsOrigin = ['https://bbs-conversations-students.web.app'];
+let corsOrigin = [];
+if (!development) corsOrigin.push('https://bbs-conversations-students.web.app');
 if (development) corsOrigin.push('http://localhost:3000');
 
 const io = socketIo(server, {
