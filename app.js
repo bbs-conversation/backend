@@ -26,19 +26,20 @@ const client = require('./config/mongoClient');
 
 const development = process.env.NODE_ENV !== 'production' || false;
 
-let corsOrigin = [];
-if (!development) corsOrigin.push('https://bbs-conversations-students.web.app');
-if (development) corsOrigin.push('http://localhost:3000');
+const getCORSOrigin = () => {
+  if (!development) return ['https://bbs-conversations-students.web.app'];
+  if (development) return ['http://localhost:3000'];
+};
 
 const io = socketIo(server, {
   cors: {
-    origin: corsOrigin,
+    origin: getCORSOrigin(),
     methods: ['GET', 'POST'],
   },
 });
 
 const corsOptions = {
-  origin: corsOrigin,
+  origin: getCORSOrigin(),
   optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
