@@ -33,13 +33,12 @@ const getCORSOrigin = () => {
 
 const io = socketIo(server, {
   cors: {
-    origin: ['https://bbs-conversations-students.web.app'],
+    origin: '*',
     methods: ['GET', 'POST'],
   },
 });
 
 const corsOptions = {
-  origin: ['https://bbs-conversations-students.web.app'],
   optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
