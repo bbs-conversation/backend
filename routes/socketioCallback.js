@@ -1,5 +1,6 @@
 const Filter = require('bad-words');
 const client = require('../config/mongoClient');
+const counsellors = require('../config/counsellors');
 
 const development = process.env.NODE_ENV !== 'production' || false;
 const filter = new Filter();
