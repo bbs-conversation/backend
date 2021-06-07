@@ -1,7 +1,6 @@
 const Filter = require('bad-words');
 const client = require('../config/mongoClient');
 const counsellors = require('../config/counsellors');
-
 const development = process.env.NODE_ENV !== 'production' || false;
 const filter = new Filter();
 let chatRooms;
@@ -103,7 +102,7 @@ const socketioCallback = (socket) => {
     chatRooms.updateOne(usersFilter, {
       $push: {
         messages: {
-          message: filter.clean(message),
+          message: message,
           time: new Date(),
           sender: id,
           senderName: socket.token.name,
@@ -112,7 +111,7 @@ const socketioCallback = (socket) => {
       },
     });
     socket.broadcast.to(socket.activeChat).emit('message', {
-      message: filter.clean(message),
+      message: message,
       time: new Date(),
       senderName: socket.token.name,
       sender: id,
