@@ -35,7 +35,17 @@ const socketioCallback = (socket) => {
 
   socket.on('chat-with', async ({ user }) => {
     if (development) console.log('fired chat-with event', user);
-    if (socket.token.user_id === user) {
+    if (!id) {
+      socket.activeChat = undefined;
+      return socket.emit('message', {
+        message:
+          'We have noticed that your session has expired please refresh your page and try again',
+        time: new Date(),
+        recipient: id,
+        senderName: 'Chat Bot',
+      });
+    }
+    if (id === user) {
       socket.activeChat = undefined;
       return socket.emit('message', {
         message: 'Users can only chat with others',
@@ -98,6 +108,16 @@ const socketioCallback = (socket) => {
         senderName: 'Chat Bot',
         recipient: id,
       });
+    if (!id) {
+      socket.activeChat = undefined;
+      return socket.emit('message', {
+        message:
+          'We have noticed that your session has expired please refresh your page and try again',
+        time: new Date(),
+        recipient: id,
+        senderName: 'Chat Bot',
+      });
+    }
     const usersFilter = { users: { $all: [id, socket.activeChat] } };
     chatRooms.updateOne(usersFilter, {
       $push: {
